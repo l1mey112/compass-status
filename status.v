@@ -103,7 +103,7 @@ fn make_request(cfg CompassRequestConfig) ![]CalendarEntry {
 	server_date := time.parse_rfc2822(ret.header.get(.date)!)!.add_days(cfg.day_offset)
 
 	// `duration - 1 minute` to account for travel time
-	hr_discrepancy := (time.now() - server_date - time.minute) / time.hour
+	hr_discrepancy := (time.now() - server_date + time.minute) / time.hour
 
 	mut entries := data.d.map(CalendarEntry{
 		name: it.name
