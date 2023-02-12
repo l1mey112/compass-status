@@ -193,7 +193,7 @@ fn pretty_print_time(current_time time.Duration) string {
 }
 
 fn (status CompassStatus) status() string {
-	now := time.now().add(-8 * time.hour) //.add_days(status.cfg.day_offset)
+	now := time.now() //.add(-8 * time.hour) //.add_days(status.cfg.day_offset)
 
 	if status.error != '' {
 		return status.error
