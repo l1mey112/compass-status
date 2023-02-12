@@ -34,10 +34,14 @@ struct CalendarEntry {
 }
 
 struct CompassRequestConfig {
-	url          string
-	user_id      int               [toml: 'auth.user_id']
-	auth_cookies map[string]string [toml: 'auth.cookies']
-	day_offset   int
+	url                    string
+	user_id                int               [toml: 'auth.user_id']
+	auth_cookies           map[string]string [toml: 'auth.cookies']
+	day_offset             int
+	msg_no_classes         string            [toml: 'messages.no_classes']
+	msg_before_all_classes string            [toml: 'messages.before_all_classes']
+	msg_after_all_classes  string            [toml: 'messages.after_all_classes']
+	msg_recess             string            [toml: 'messages.recess']
 mut:
 	refresh_mins int
 }
@@ -58,7 +62,10 @@ fn handle_changes(name string) (string, string) {
 }
 
 fn parse_into_class_entry(name string) ClassEntry {
-	components := name.split(' - ')
+	mut components := name.split(' - ')
+	if components.len == 2 {
+		components << components[1].split(', ')
+	}
 
 	room, room_old := handle_changes(components[1])
 	teacher, teacher_old := handle_changes(components[2])
@@ -78,14 +85,12 @@ fn make_request(cfg CompassRequestConfig) ![]CalendarEntry {
 
 	request_json := '{"userId":${cfg.user_id},"startDate":"${formatted_date}","endDate":"${formatted_date}","page":1,"start":0,"limit":25}'
 
-	mut req := http.new_request(.post, cfg.url, request_json) or {
-		return error('make_request: could not create request!\n\n${err}')
-	}
+	mut req := http.new_request(.post, cfg.url, request_json) or { panic('unreachable') }
 
 	req.cookies = cfg.auth_cookies.clone()
 	req.add_header(.content_type, 'application/json')
 
-	ret := req.do() or { return error('request failed to send (network connection?)\n\n${err}') }
+	ret := req.do() or { return error('request failed to send (network connection?) ${err}') }
 
 	if ret.status_code != 200 {
 		return error('request failed, missing auth cookies? (${ret.status_code}: ${ret.status_msg})')
@@ -97,14 +102,14 @@ fn make_request(cfg CompassRequestConfig) ![]CalendarEntry {
 
 	server_date := time.parse_rfc2822(ret.header.get(.date)!)!.add_days(cfg.day_offset)
 
-	// `duration + 1 minute` to account for travel time
-	time_discrepancy := (client_date - server_date + time.minute) / time.hour
+	// `duration - 1 minute` to account for travel time
+	hr_discrepancy := (time.now() - server_date - time.minute) / time.hour
 
 	mut entries := data.d.map(CalendarEntry{
 		name: it.name
 		full_name: it.full_name
-		start: time.parse_iso8601(it.start)!.add(time_discrepancy * time.hour)
-		finish: time.parse_iso8601(it.finish)!.add(time_discrepancy * time.hour)
+		start: time.parse_iso8601(it.start)!.add(hr_discrepancy * time.hour)
+		finish: time.parse_iso8601(it.finish)!.add(hr_discrepancy * time.hour)
 		colour: int(strconv.common_parse_int(it.background_colour[1..], 16, 32, true,
 			true)!)
 		class: parse_into_class_entry(it.full_name)
@@ -137,6 +142,7 @@ fn (mut status CompassStatus) refresh_loop() {
 enum Status {
 	empty
 	before
+	recess
 	during
 	after
 }
@@ -154,9 +160,14 @@ fn (status CompassStatus) find_current_class(now time.Time) (int, Status) {
 
 		// During a current class.
 		for idx, entry in status.calendar {
-			if now <= entry.finish {
+			if now <= entry.finish && now >= entry.start {
 				return idx, Status.during
 			}
+		}
+
+		// Still inside calendar, but not inside a current event.
+		if now < status.calendar.last().finish {
+			return -1, Status.recess
 		}
 	}
 	// After all classes.
@@ -182,7 +193,7 @@ fn pretty_print_time(current_time time.Duration) string {
 }
 
 fn (status CompassStatus) status() string {
-	now := time.now().add_days(status.cfg.day_offset) // time.parse_iso8601('2023-02-16T03:50:00Z') or { panic(err) }
+	now := time.now().add(-8 * time.hour) //.add_days(status.cfg.day_offset)
 
 	if status.error != '' {
 		return status.error
@@ -197,35 +208,43 @@ fn (status CompassStatus) status() string {
 	mut rhs := ''
 	mut diff := time.Duration(0)
 
+	// msg_no_classes
+	// msg_before_all_classes
+	// msg_after_all_classes
+	// msg_recess
+
 	rlock status.calendar {
 		match state {
 			.empty {
-				return 'No classes!'
+				return status.cfg.msg_no_classes
 			}
 			.before {
 				next_up := status.calendar[0]
 
-				lhs, diff, rhs = 'Before', next_up.start - now, next_up.name
+				lhs, diff, rhs = status.cfg.msg_before_all_classes, next_up.start - now, next_up.name
 			}
 			.during {
 				class_current := status.calendar[class]
 				class_next_idx := class + 1
 
 				next_up_name := if class_next_idx >= status.calendar.len {
-					'Done with the day!'
+					status.cfg.msg_after_all_classes
 				} else {
 					status.calendar[class_next_idx].name
 				}
 
 				lhs, diff, rhs = class_current.name, class_current.finish - now, next_up_name
 			}
+			.recess {
+				return status.cfg.msg_recess
+			}
 			.after {
-				return 'Done with the day!'
+				return status.cfg.msg_after_all_classes
 			}
 		}
 	}
 
-	return '${lhs} 🠒 ${pretty_print_time(diff)} 🠒 ${rhs}'
+	return '${lhs} - ${pretty_print_time(diff)} - ${rhs}'
 }
 
 fn (mut status CompassStatus) run() {

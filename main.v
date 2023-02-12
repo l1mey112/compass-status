@@ -5,13 +5,34 @@ import term
 
 const default_config_path = os.join_path_single(os.config_dir()!, 'compass_status.toml')
 
-fn print_default_config(cmd cli.Command)! {
+fn print_default_config(cmd cli.Command) ! {
+	println("# ~/.config/compass_status.toml
+
+url = 'https://xxxxxxx.compass.education/Services/Calendar.svc/GetCalendarEventsByUser'
+# day_offset = 1
+# refresh_mins = 20
+
+[auth]
+user_id = 0000
+[auth.cookies]
+'ASP.NET_SessionId' = 'xxx-xxx-xxx-xxx-xxxxx'
+
+[messages]
+# 
+#              no classes
+# start of day ->  30m -> class
+#        class ->  30m -> end of day!
+#             inside recess
+# 
+
+no_classes = 'no classes'
+recess = 'inside recess'
+before_all_classes = 'start of day'
+after_all_classes = 'end of day!'")
 }
 
 fn get_config(path string) !CompassRequestConfig {
-	config := os.read_file(path) or {
-		return error('failed to read config file at `${path}`')
-	}
+	config := os.read_file(path) or { return error('failed to read config file at `${path}`') }
 
 	doc := toml.parse_text(config) or { return error('failed to parse configuration\n${err}') }
 
@@ -24,7 +45,7 @@ fn get_config(path string) !CompassRequestConfig {
 	return cfg
 }
 
-fn run_status(cmd cli.Command)! {
+fn run_status(cmd cli.Command) ! {
 	config_path := cmd.flags.get_string('config')!
 
 	mut status := CompassStatus{
@@ -41,7 +62,7 @@ fn left_align(str string, real_len int, padded_len int) string {
 	return str
 }
 
-fn run_request(cmd cli.Command)! {
+fn run_request(cmd cli.Command) ! {
 	config_path := cmd.flags.get_string('config')!
 
 	mut status := CompassStatus{
@@ -57,30 +78,30 @@ fn run_request(cmd cli.Command)! {
 		for entry in status.calendar {
 			diff := pretty_print_time(entry.finish - entry.start)
 
-			mut class := "${entry.class.name:-7} "
+			mut class := '${entry.class.name:-7} '
 
-			mut teacher := ""
+			mut teacher := ''
 			mut teacherl := 0
 
 			if entry.class.teacher_old != '' {
-				teacher += "${term.strikethrough(term.dim(entry.class.teacher_old))} "
+				teacher += '${term.strikethrough(term.dim(entry.class.teacher_old))} '
 				teacherl += entry.class.teacher_old.len + 1
 			}
-			teacher += "${entry.class.teacher} "
+			teacher += '${entry.class.teacher} '
 			teacherl += entry.class.teacher.len + 1
-			
+
 			class += left_align(teacher, teacherl, 10)
-			class += "${entry.class.room} "
+			class += '${entry.class.room} '
 			if entry.class.room_old != '' {
-				class += "${term.strikethrough(term.dim(entry.class.room_old))} "
+				class += '${term.strikethrough(term.dim(entry.class.room_old))} '
 			}
 
-			text := "${diff:4} ${divider} ${entry.start.hhmm()} - ${entry.finish.hhmm()} ${divider} ${class}"
+			text := '${diff:4} ${divider} ${entry.start.hhmm()} - ${entry.finish.hhmm()} ${divider} ${class}'
 			println(text)
 		}
 
 		if status.calendar.len == 0 {
-			println("Nothing for today!")
+			println(status.cfg.msg_no_classes)
 		}
 	}
 }
@@ -111,7 +132,7 @@ fn main() {
 				description: 'Print out configuration.'
 				disable_man: true
 				posix_mode: true
-				execute: fn (cmd cli.Command)! {
+				execute: fn (cmd cli.Command) ! {
 					config_path := cmd.flags.get_string('config')!
 
 					cfg := get_config(config_path)!
