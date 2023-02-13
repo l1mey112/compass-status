@@ -192,6 +192,20 @@ fn pretty_print_time(current_time time.Duration) string {
 	return '${current_time / time.second}s'
 }
 
+fn generate_next_up(class ClassEntry) string {
+	mut ret := '${class.name} (${class.room}'
+	if class.room_old != '' {
+		ret += ', old ${class.room_old}'
+	}
+	ret += ' + ${class.teacher}'
+	if class.teacher_old != '' {
+		ret += ', old ${class.teacher_old}'
+	}
+	ret += ')'
+
+	return ret
+}
+
 fn (status CompassStatus) status() string {
 	now := time.now() //.add(-8 * time.hour) //.add_days(status.cfg.day_offset)
 
@@ -221,7 +235,7 @@ fn (status CompassStatus) status() string {
 			.before {
 				next_up := status.calendar[0]
 
-				lhs, diff, rhs = status.cfg.msg_before_all_classes, next_up.start - now, next_up.name
+				lhs, diff, rhs = status.cfg.msg_before_all_classes, next_up.start - now, generate_next_up(next_up.class)
 			}
 			.during {
 				class_current := status.calendar[class]
@@ -230,7 +244,7 @@ fn (status CompassStatus) status() string {
 				next_up_name := if class_next_idx >= status.calendar.len {
 					status.cfg.msg_after_all_classes
 				} else {
-					status.calendar[class_next_idx].name
+					generate_next_up(status.calendar[class_next_idx].class)
 				}
 
 				lhs, diff, rhs = class_current.name, class_current.finish - now, next_up_name
