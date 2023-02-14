@@ -90,7 +90,7 @@ fn run_request(cmd cli.Command) ! {
 			teacher += '${entry.class.teacher} '
 			teacherl += entry.class.teacher.len + 1
 
-			class += left_align(teacher, teacherl, 10)
+			class += left_align(teacher, teacherl, 14)
 			class += '${entry.class.room} '
 			if entry.class.room_old != '' {
 				class += '${term.strikethrough(term.dim(entry.class.room_old))} '

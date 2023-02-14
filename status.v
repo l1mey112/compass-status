@@ -247,7 +247,7 @@ fn (status CompassStatus) status() string {
 					generate_next_up(status.calendar[class_next_idx].class)
 				}
 
-				lhs, diff, rhs = class_current.name, class_current.finish - now, next_up_name
+				lhs, diff, rhs = generate_next_up(class_current.class), class_current.finish - now, next_up_name
 			}
 			.recess {
 				return status.cfg.msg_recess
